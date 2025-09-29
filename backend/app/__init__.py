@@ -3,8 +3,13 @@ from flask_cors import CORS
 from flask_login import LoginManager
 from .config import get_config
 from .db import db, migrate
-from .models.user import User
+
+# IMPORTANT: import ALL models so Alembic sees them
+# (requires app/models/__init__.py to import each class)
+from .models import User, Project, Milestone, Task, StatusUpdate, Comment
+
 from .routes import api
+
 
 def create_app():
     app = Flask(__name__)
@@ -21,9 +26,10 @@ def create_app():
 
     @login_manager.user_loader
     def load_user(user_id):
+        # db.session.get works in SQLAlchemy 2.x
         return db.session.get(User, int(user_id))
 
-    # CORS (dev): allow Vite origin(s), send cookies
+    # CORS (dev): allow Vite origin(s) and send cookies
     CORS(
         app,
         resources={r"/api/*": {"origins": app.config["CORS_ORIGINS"]}},
