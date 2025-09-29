@@ -1,0 +1,27 @@
+# Node / React
+node_modules/
+dist/
+*.log
+
+# Python / Flask
+.venv/
+venv/
+__pycache__/
+*.pyc
+instance/
+*.sqlite3
+
+# Env
+.env
+backend/.env
+frontend/.env
+
+# Build caches
+frontend/.vite
+backend/.pytest_cache/
+backend/migrations/__pycache__/
+
+# OS/Editor
+.DS_Store
+.vscode/
+.idea/
