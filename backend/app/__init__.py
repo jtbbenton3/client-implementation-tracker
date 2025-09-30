@@ -4,11 +4,11 @@ from flask_login import LoginManager
 from .config import get_config
 from .db import db, migrate
 
-# IMPORTANT: import ALL models so Alembic sees them
-# (requires app/models/__init__.py to import each class)
+
 from .models import User, Project, Milestone, Task, StatusUpdate, Comment
 
 from .routes import api
+from .errors import register_error_handlers  # ✅ NEW: centralized error handling
 
 
 def create_app():
@@ -26,7 +26,7 @@ def create_app():
 
     @login_manager.user_loader
     def load_user(user_id):
-        # db.session.get works in SQLAlchemy 2.x
+        
         return db.session.get(User, int(user_id))
 
     # CORS (dev): allow Vite origin(s) and send cookies
@@ -36,23 +36,15 @@ def create_app():
         supports_credentials=True,
     )
 
-    # Blueprints
+    
+    register_error_handlers(app)
+
+    
     app.register_blueprint(api)
 
-    # JSON error handlers
-    @app.errorhandler(400)
-    def bad_request(e): return jsonify({"message": "bad request"}), 400
-
-    @app.errorhandler(401)
-    def unauthorized(e): return jsonify({"message": "unauthorized"}), 401
-
-    @app.errorhandler(403)
-    def forbidden(e): return jsonify({"message": "forbidden"}), 403
-
-    @app.errorhandler(404)
-    def not_found(e): return jsonify({"message": "not found"}), 404
-
+    
     @app.get("/api/health")
-    def health(): return {"status": "ok"}, 200
+    def health():
+        return {"status": "ok"}, 200
 
     return app
