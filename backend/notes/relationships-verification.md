@@ -1,0 +1,3 @@
+- Created Project(1) → Milestone → Task → Comment
+- Deleted Project(1)
+- Verified 404 for project/milestones and 403 for task comments (auth)
