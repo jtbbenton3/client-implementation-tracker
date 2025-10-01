@@ -1,4 +1,5 @@
 from flask import request, jsonify
+from math import ceil
 
 def get_pagination_defaults(default_page=1, default_page_size=10):
     """Parse ?page and ?pageSize query params with sane defaults."""
@@ -16,7 +17,6 @@ def get_pagination_defaults(default_page=1, default_page_size=10):
 
 def paged_response(items, page, page_size, total):
     """Return a standardized paginated response object."""
-    from math import ceil
     return jsonify({
         "items": items,
         "page": page,

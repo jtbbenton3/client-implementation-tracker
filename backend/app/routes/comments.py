@@ -2,9 +2,9 @@ from flask import Blueprint, jsonify
 from flask_login import login_required, current_user
 from app.db import db
 from app.models import Task, Comment
-from .utils import get_pagination_defaults, paged_response
+from app.routes.utils import get_pagination_defaults, paged_response
 from app.validators import validate_json
-from app.schemas import CommentCreateSchema  # add this to app/schemas.py
+from app.schemas import CommentCreateSchema
 
 comments_bp = Blueprint("comments_bp", __name__)
 
@@ -19,6 +19,7 @@ def list_comments(task_id):
     task = _owns_task(task_id)
     if not task:
         return jsonify({"message": "forbidden"}), 403
+
     page, page_size = get_pagination_defaults()
     q = Comment.query.filter_by(task_id=task_id).order_by(Comment.created_at.desc())
     total = q.count()
@@ -32,6 +33,7 @@ def create_comment(task_id, data):
     task = _owns_task(task_id)
     if not task:
         return jsonify({"message": "forbidden"}), 403
+
     c = Comment(task_id=task_id, body=data["body"])
     db.session.add(c)
     db.session.commit()
@@ -43,9 +45,11 @@ def delete_comment(task_id, comment_id):
     task = _owns_task(task_id)
     if not task:
         return jsonify({"message": "forbidden"}), 403
+
     c = Comment.query.get_or_404(comment_id)
     if c.task_id != task_id:
         return jsonify({"message": "bad request"}), 400
+
     db.session.delete(c)
     db.session.commit()
     return jsonify({"message": "deleted"}), 200

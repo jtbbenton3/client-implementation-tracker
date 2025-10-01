@@ -4,6 +4,7 @@ Validation schemas and helper functions using Marshmallow
 
 from marshmallow import Schema, fields, validate, ValidationError as MarshmallowValidationError
 from flask import request
+from functools import wraps
 from .errors import ValidationError
 
 
@@ -40,3 +41,19 @@ def load_json(schema_cls):
         return schema.load(data)
     except MarshmallowValidationError as err:
         raise ValidationError("Invalid input", payload={"errors": err.messages})
+
+
+def validate_json(schema_cls):
+    """
+    Decorator version of load_json. Injects validated data into the route.
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            try:
+                data = load_json(schema_cls)
+            except ValidationError as err:
+                return err.to_response()
+            return fn(*args, **kwargs, data=data)
+        return wrapper
+    return decorator
