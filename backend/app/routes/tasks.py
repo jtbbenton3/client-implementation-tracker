@@ -1,10 +1,10 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, jsonify, request
 from flask_login import login_required, current_user
-from ..db import db
-from ..models.milestone import Milestone
-from ..models.task import Task
-from ..models.project import Project
+from app.db import db
+from app.models import Milestone, Task, Project
 from .utils import get_pagination_defaults, paged_response
+from app.validators import validate_json
+from app.schemas import TaskCreateSchema, TaskUpdateSchema  # you’ll need these schemas defined
 
 tasks_bp = Blueprint("tasks_bp", __name__)
 
@@ -28,31 +28,27 @@ def list_tasks(project_id, milestone_id):
 
 @tasks_bp.post("/<int:project_id>/milestones/<int:milestone_id>/tasks")
 @login_required
-def create_task(project_id, milestone_id):
+@validate_json(TaskCreateSchema)
+def create_task(project_id, milestone_id, data):
     if not _owns(project_id):
         return jsonify({"message": "forbidden"}), 403
     ms = Milestone.query.get_or_404(milestone_id)
     if ms.project_id != project_id:
         return jsonify({"message": "bad request"}), 400
-    data = request.get_json() or {}
-    title = (data.get("title") or "").strip()
-    if not title:
-        return jsonify({"message": "title is required"}), 400
-    t = Task(milestone_id=milestone_id, title=title, assignee=data.get("assignee"))
-    if data.get("due_date"):
-        from datetime import date
-        try:
-            y, m, d = map(int, data["due_date"].split("-"))
-            t.due_date = date(y, m, d)
-        except Exception:
-            return jsonify({"message": "due_date must be YYYY-MM-DD"}), 400
+    t = Task(
+        milestone_id=milestone_id,
+        title=data["title"],
+        assignee=data.get("assignee"),
+        due_date=data.get("due_date"),
+    )
     db.session.add(t)
     db.session.commit()
     return jsonify({"task": t.to_dict()}), 201
 
 @tasks_bp.patch("/<int:project_id>/milestones/<int:milestone_id>/tasks/<int:task_id>")
 @login_required
-def update_task(project_id, milestone_id, task_id):
+@validate_json(TaskUpdateSchema)
+def update_task(project_id, milestone_id, task_id, data):
     if not _owns(project_id):
         return jsonify({"message": "forbidden"}), 403
     ms = Milestone.query.get_or_404(milestone_id)
@@ -61,20 +57,8 @@ def update_task(project_id, milestone_id, task_id):
     t = Task.query.get_or_404(task_id)
     if t.milestone_id != milestone_id:
         return jsonify({"message": "bad request"}), 400
-    data = request.get_json() or {}
-    for key in ["title", "assignee", "is_done"]:
-        if key in data:
-            setattr(t, key, data[key])
-    if "due_date" in data:
-        from datetime import date
-        val = data["due_date"]
-        t.due_date = None
-        if val:
-            try:
-                y, m, d = map(int, val.split("-"))
-                t.due_date = date(y, m, d)
-            except Exception:
-                return jsonify({"message": "due_date must be YYYY-MM-DD"}), 400
+    for key, value in data.items():
+        setattr(t, key, value)
     db.session.commit()
     return jsonify({"task": t.to_dict()}), 200
 
