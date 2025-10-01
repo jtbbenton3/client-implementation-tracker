@@ -1,35 +1,23 @@
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy import or_
-from ..db import db
-from ..models.project import Project
+from app.db import db
+from app.models.project import Project
 from .utils import get_pagination_defaults, paged_response, get_sorting
-from ..validation_utils import load_json, handle_validation_error
-from marshmallow import Schema, fields, validate, ValidationError
+from app.validators import load_json
+from app.errors import ValidationError
+from app.schemas import ProjectCreateSchema, ProjectPatchSchema
 
 projects_bp = Blueprint("projects_bp", __name__)
 
-# ✅ Marshmallow schemas
-class ProjectCreateSchema(Schema):
-    client_name = fields.Str(required=True, validate=validate.Length(min=1, max=200))
-    title       = fields.Str(required=True, validate=validate.Length(min=1, max=200))
-    phase       = fields.Str(load_default="Discovery", validate=validate.Length(max=200))
-    description = fields.Str(load_default=None)
-
-class ProjectPatchSchema(Schema):
-    client_name = fields.Str(validate=validate.Length(min=1, max=200))
-    title       = fields.Str(validate=validate.Length(min=1, max=200))
-    phase       = fields.Str(validate=validate.Length(max=200))
-    description = fields.Str(load_default=None)
-
-# 📄 List projects with search, sort, pagination
+# List projects with search, sort, pagination
 @projects_bp.get("")
 @login_required
 def list_projects():
     page, page_size = get_pagination_defaults()
     query = Project.query.filter_by(owner_id=current_user.id)
 
-    # 🔍 Search by client_name, title, or phase
+    # Search by client_name, title, or phase
     q = (request.args.get("q") or "").strip()
     if q:
         like = f"%{q}%"
@@ -41,7 +29,7 @@ def list_projects():
             )
         )
 
-    # 🔢 Sorting (?sort=client_name,-updated_at)
+    # Sorting (?sort=client_name,-updated_at)
     sort_cols = get_sorting(
         {
             "client_name": Project.client_name,
@@ -58,14 +46,14 @@ def list_projects():
     rows = query.offset((page - 1) * page_size).limit(page_size).all()
     return paged_response([p.to_dict() for p in rows], page, page_size, total)
 
-# ➕ Create a project with validation
+# Create a project with validation
 @projects_bp.post("")
 @login_required
 def create_project():
     try:
         payload = load_json(ProjectCreateSchema)
     except ValidationError as err:
-        return handle_validation_error(err)
+        return err.to_response()
 
     p = Project(
         owner_id=current_user.id,
@@ -78,7 +66,7 @@ def create_project():
     db.session.commit()
     return jsonify({"project": p.to_dict()}), 201
 
-# 📄 Get a single project
+# Get a single project
 @projects_bp.get("/<int:project_id>")
 @login_required
 def get_project(project_id):
@@ -87,7 +75,7 @@ def get_project(project_id):
         return jsonify({"message": "forbidden"}), 403
     return jsonify({"project": p.to_dict(with_children=True)}), 200
 
-# ✏️ Update a project
+# Update a project
 @projects_bp.patch("/<int:project_id>")
 @login_required
 def update_project(project_id):
@@ -98,7 +86,7 @@ def update_project(project_id):
     try:
         data = load_json(ProjectPatchSchema)
     except ValidationError as err:
-        return handle_validation_error(err)
+        return err.to_response()
 
     for key in ["client_name", "title", "phase", "description"]:
         if key in data and data[key] is not None:
@@ -106,7 +94,7 @@ def update_project(project_id):
     db.session.commit()
     return jsonify({"project": p.to_dict()}), 200
 
-# 🗑️ Delete a project
+# Delete a project
 @projects_bp.delete("/<int:project_id>")
 @login_required
 def delete_project(project_id):

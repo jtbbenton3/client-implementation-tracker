@@ -4,11 +4,9 @@ from flask_login import LoginManager
 from .config import get_config
 from .db import db, migrate
 
-
 from .models import User, Project, Milestone, Task, StatusUpdate, Comment
-
 from .routes import api
-from .errors import register_error_handlers  # ✅ NEW: centralized error handling
+from .errors import register_error_handlers  
 
 
 def create_app():
@@ -21,28 +19,30 @@ def create_app():
 
     # Login manager
     login_manager = LoginManager()
-    login_manager.login_view = "api.auth_bp.login"  # SPA won’t redirect, but good to have
     login_manager.init_app(app)
 
     @login_manager.user_loader
     def load_user(user_id):
-        
         return db.session.get(User, int(user_id))
 
-    # CORS (dev): allow Vite origin(s) and send cookies
+    
+    @login_manager.unauthorized_handler
+    def unauthorized():
+        return jsonify({"error": "Unauthorized"}), 401
+
+    
     CORS(
         app,
         resources={r"/api/*": {"origins": app.config["CORS_ORIGINS"]}},
         supports_credentials=True,
     )
 
-    
+    # Error handlers
     register_error_handlers(app)
 
-    
+    # Blueprints
     app.register_blueprint(api)
 
-    
     @app.get("/api/health")
     def health():
         return {"status": "ok"}, 200

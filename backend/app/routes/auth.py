@@ -1,51 +1,63 @@
-from flask import Blueprint, request, jsonify
-from flask_login import login_user, logout_user, current_user, login_required
-from ..db import db
-from ..models.user import User
+# app/routes/auth.py
 
-auth_bp = Blueprint("auth_bp", __name__)
+from flask import request, session, jsonify, Blueprint
+from flask_login import login_user  
+from werkzeug.security import generate_password_hash, check_password_hash
+from app.db import db
+from app.models import User
+from app.schemas import LoginSchema, SignupSchema
 
-@auth_bp.post("/signup")
+auth_bp = Blueprint("auth", __name__)
+
+login_schema = LoginSchema()
+signup_schema = SignupSchema()
+
+
+@auth_bp.route("/signup", methods=["POST"])
 def signup():
-    data = request.get_json() or {}
-    email = (data.get("email") or "").strip().lower()
-    name = (data.get("name") or "").strip()
-    password = data.get("password") or ""
+    data = request.get_json()
+    errors = signup_schema.validate(data)
+    if errors:
+        return jsonify(errors), 400
 
-    if not email or not name or not password:
-        return jsonify({"message": "email, name, and password are required"}), 400
+    if User.query.filter_by(email=data["email"]).first():
+        return jsonify({"error": "Email already registered"}), 400
 
-    if User.query.filter_by(email=email).first():
-        return jsonify({"message": "email already in use"}), 409
+    new_user = User(
+        email=data["email"],
+        name=data["name"]
+    )
+    new_user.set_password(data["password"])
 
-    user = User(email=email, name=name)
-    user.set_password(password)
-    db.session.add(user)
+    db.session.add(new_user)
     db.session.commit()
-    login_user(user)  # start session after signup
-    return jsonify({"user": user.to_dict()}), 201
 
-@auth_bp.post("/login")
+    # Optionally log in the user immediately
+    login_user(new_user)
+    session["user_id"] = new_user.id
+
+    return jsonify({
+        "id": new_user.id,
+        "email": new_user.email,
+        "name": new_user.name
+    }), 201
+
+
+@auth_bp.route("/login", methods=["POST"])
 def login():
-    data = request.get_json() or {}
-    email = (data.get("email") or "").strip().lower()
-    password = data.get("password") or ""
+    data = request.get_json()
+    errors = login_schema.validate(data)
+    if errors:
+        return jsonify(errors), 400
 
-    user = User.query.filter_by(email=email).first()
-    if not user or not user.check_password(password):
-        return jsonify({"message": "invalid credentials"}), 401
-
-    login_user(user)
-    return jsonify({"user": user.to_dict()}), 200
-
-@auth_bp.post("/logout")
-@login_required
-def logout():
-    logout_user()
-    return jsonify({"message": "logged out"}), 200
-
-@auth_bp.get("/me")
-def me():
-    if not current_user.is_authenticated:
-        return jsonify({"user": None}), 200
-    return jsonify({"user": current_user.to_dict()}), 200
+    user = User.query.filter_by(email=data["email"]).first()
+    if user and user.check_password(data["password"]):
+        login_user(user)  
+        session["user_id"] = user.id
+        return jsonify({
+            "id": user.id,
+            "email": user.email,
+            "name": user.name
+        })
+    else:
+        return jsonify({"error": "Invalid email or password"}), 401

@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, request
 from flask_login import login_required, current_user
 from app.db import db
 from app.models import Project, Milestone
-from .utils import paginate
+from .utils import get_pagination_defaults, paged_response  # ✅ updated import
 from app.validators import validate_json
 from app.schemas import MilestoneCreateSchema  # expects: name (str, req), target_date (date)
 
@@ -24,14 +24,20 @@ def list_milestones(project_id: int):
     if not project:
         return jsonify({"message": "Resource not found"}), 404
 
+    page, page_size = get_pagination_defaults()
     q = Milestone.query.filter_by(project_id=project.id).order_by(Milestone.id.asc())
-    return paginate(q, serializer=lambda m: {
-        "id": m.id,
-        "project_id": m.project_id,
-        "name": m.name,
-        "target_date": m.target_date.isoformat() if m.target_date else None,
-        "created_at": m.created_at.isoformat() if m.created_at else None,
-    })
+    total = q.count()
+    rows = q.offset((page - 1) * page_size).limit(page_size).all()
+
+    return paged_response([
+        {
+            "id": m.id,
+            "project_id": m.project_id,
+            "name": m.name,
+            "target_date": m.target_date.isoformat() if m.target_date else None,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+        } for m in rows
+    ], page, page_size, total)
 
 @milestones_bp.post("/<int:project_id>/milestones")
 @login_required
