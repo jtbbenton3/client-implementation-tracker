@@ -1,66 +1,110 @@
-from flask import Blueprint, jsonify, request
-from flask_login import login_required, current_user
-from app.db import db
-from app.models import Project, Milestone
-from .utils import get_pagination_defaults, paged_response  # ✅ updated import
-from app.validators import validate_json
-from app.schemas import MilestoneCreateSchema  # expects: name (str, req), target_date (date)
+from flask import Blueprint, request, jsonify, session
+from datetime import datetime
+from ..db import db
+from ..models import Milestone, Project
+from .utils import login_required
 
-milestones_bp = Blueprint("milestones_bp", __name__, url_prefix="/api")
+milestones_bp = Blueprint("milestones", __name__, url_prefix="/api/projects/<int:project_id>/milestones")
 
-def _project_or_404(project_id: int) -> Project:
-    project = db.session.get(Project, int(project_id))
-    if not project:
-        return None
+@milestones_bp.route("", methods=["POST"])
+@login_required
+def create_milestone(project_id):
+    user_id = session.get("user_id")
     
-    # if project.owner_id != current_user.id:
-    #     return None
-    return project
-
-@milestones_bp.get("/<int:project_id>/milestones")
-@login_required
-def list_milestones(project_id: int):
-    project = _project_or_404(project_id)
+    # check if user owns this project
+    project = Project.query.filter_by(id=project_id, owner_id=user_id).first()
     if not project:
-        return jsonify({"message": "Resource not found"}), 404
-
-    page, page_size = get_pagination_defaults()
-    q = Milestone.query.filter_by(project_id=project.id).order_by(Milestone.id.asc())
-    total = q.count()
-    rows = q.offset((page - 1) * page_size).limit(page_size).all()
-
-    return paged_response([
-        {
-            "id": m.id,
-            "project_id": m.project_id,
-            "name": m.name,
-            "target_date": m.target_date.isoformat() if m.target_date else None,
-            "created_at": m.created_at.isoformat() if m.created_at else None,
-        } for m in rows
-    ], page, page_size, total)
-
-@milestones_bp.post("/<int:project_id>/milestones")
-@login_required
-@validate_json(MilestoneCreateSchema)
-def create_milestone(project_id: int, data):
-    project = _project_or_404(project_id)
-    if not project:
-        return jsonify({"message": "Resource not found"}), 404
-
-    ms = Milestone(
-        project_id=project.id,
+        return jsonify({"error": "Project not found"}), 404
+    
+    data = request.get_json()
+    if not data.get("name"):
+        return jsonify({"error": "Name is required"}), 400
+    
+    target_date = None
+    if data.get("target_date"):
+        try:
+            target_date = datetime.strptime(data["target_date"], "%Y-%m-%d").date()
+        except ValueError:
+            return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+    
+    milestone = Milestone(
         name=data["name"],
-        target_date=data.get("target_date"),
+        target_date=target_date,
+        project_id=project_id
     )
-    db.session.add(ms)
+    db.session.add(milestone)
     db.session.commit()
+    return jsonify({"milestone": milestone.to_dict()}), 201
 
-    return jsonify({
-        "milestone": {
-            "id": ms.id,
-            "project_id": ms.project_id,
-            "name": ms.name,
-            "target_date": ms.target_date.isoformat() if ms.target_date else None,
-            "created_at": ms.created_at.isoformat() if ms.created_at else None,
-        }
-    }), 201
+@milestones_bp.route("", methods=["GET"])
+@login_required
+def list_milestones(project_id):
+    user_id = session.get("user_id")
+    
+    # check if user owns this project
+    project = Project.query.filter_by(id=project_id, owner_id=user_id).first()
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+    
+    milestones = Milestone.query.filter_by(project_id=project_id).all()
+    return jsonify({"items": [m.to_dict() for m in milestones]}), 200
+
+@milestones_bp.route("/<int:milestone_id>", methods=["GET"])
+@login_required
+def get_milestone(project_id, milestone_id):
+    user_id = session.get("user_id")
+    
+    # check if user owns this project
+    project = Project.query.filter_by(id=project_id, owner_id=user_id).first()
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+    
+    milestone = Milestone.query.filter_by(id=milestone_id, project_id=project_id).first()
+    if not milestone:
+        return jsonify({"error": "Milestone not found"}), 404
+    
+    return jsonify({"milestone": milestone.to_dict()}), 200
+
+@milestones_bp.route("/<int:milestone_id>", methods=["PUT"])
+@login_required
+def update_milestone(project_id, milestone_id):
+    user_id = session.get("user_id")
+    
+    # check if user owns this project
+    project = Project.query.filter_by(id=project_id, owner_id=user_id).first()
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+    
+    milestone = Milestone.query.filter_by(id=milestone_id, project_id=project_id).first()
+    if not milestone:
+        return jsonify({"error": "Milestone not found"}), 404
+    
+    data = request.get_json()
+    if data.get("name"):
+        milestone.name = data["name"]
+    if data.get("target_date"):
+        try:
+            milestone.target_date = datetime.strptime(data["target_date"], "%Y-%m-%d").date()
+        except ValueError:
+            return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+    
+    db.session.commit()
+    return jsonify({"milestone": milestone.to_dict()}), 200
+
+@milestones_bp.route("/<int:milestone_id>", methods=["DELETE"])
+@login_required
+def delete_milestone(project_id, milestone_id):
+    user_id = session.get("user_id")
+    
+    # check if user owns this project
+    project = Project.query.filter_by(id=project_id, owner_id=user_id).first()
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+    
+    milestone = Milestone.query.filter_by(id=milestone_id, project_id=project_id).first()
+    if not milestone:
+        return jsonify({"error": "Milestone not found"}), 404
+    
+    db.session.delete(milestone)
+    db.session.commit()
+    return jsonify({"message": "Milestone deleted"}), 200

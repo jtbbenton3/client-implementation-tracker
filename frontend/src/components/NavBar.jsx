@@ -1,40 +1,35 @@
+import React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../Context/AuthContext";
+import { logout } from "../lib/api";
 
-function NavBar() {
-  const { user, logout } = useAuth();
+export default function NavBar() {
+  const { user, refreshUser } = useAuth();
   const navigate = useNavigate();
 
-  function handleLogout() {
-    fetch("http://localhost:5555/logout", {
-      method: "DELETE",
-      credentials: "include",
-    })
-      .then(() => {
-        logout();
-        navigate("/login");
-      })
-      .catch((err) => {
-        console.error("Logout failed:", err);
-      });
-  }
+  const handleLogout = async () => {
+    await logout();
+    await refreshUser();
+    navigate("/login");
+  };
 
   return (
-    <nav>
-      <Link to="/">Home</Link>
-      {user ? (
-        <>
-          <Link to="/projects">Projects</Link>
-          <button onClick={handleLogout}>Logout</button>
-        </>
-      ) : (
-        <>
-          <Link to="/login">Log In</Link>
-          <Link to="/signup">Sign Up</Link>
-        </>
-      )}
+    <nav className="navbar">
+      <h1>Client Implementation Tracker</h1>
+      <div>
+        {user ? (
+          <>
+            <Link to="/projects">Projects</Link>
+            <Link to="/dashboard">Dashboard</Link>
+            <button onClick={handleLogout}>Logout</button>
+          </>
+        ) : (
+          <>
+            <Link to="/login">Login</Link>
+            <Link to="/signup">Signup</Link>
+          </>
+        )}
+      </div>
     </nav>
   );
 }
-
-export default NavBar;

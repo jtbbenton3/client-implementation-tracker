@@ -1,50 +1,47 @@
-from flask import Flask, jsonify
-from flask_cors import CORS
+from flask import Flask
+from flask_migrate import Migrate
 from flask_login import LoginManager
-from .config import get_config
-from .db import db, migrate
-
-from .models import User, Project, Milestone, Task, StatusUpdate, Comment
-from .routes import api
-from .errors import register_error_handlers  
-
+from flask_cors import CORS
+from .db import db
 
 def create_app():
     app = Flask(__name__)
-    app.config.from_object(get_config())
+    app.config.from_object("config.Config")
 
-    # DB + Migrations
+    # set up database and cors
     db.init_app(app)
-    migrate.init_app(app, db)
-
-    # Login manager
+    migrate = Migrate(app, db)
+    CORS(app, 
+         origins=["http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5173", "http://127.0.0.1:5174", "http://localhost:3000"],
+         supports_credentials=True,
+         allow_headers=["Content-Type", "Authorization"],
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"])
+    
+    # login stuff
     login_manager = LoginManager()
     login_manager.init_app(app)
-
+    login_manager.login_view = 'auth.login'
+    
     @login_manager.user_loader
     def load_user(user_id):
-        return db.session.get(User, int(user_id))
+        from .models import User
+        return User.query.get(int(user_id))
 
-    
-    @login_manager.unauthorized_handler
-    def unauthorized():
-        return jsonify({"error": "Unauthorized"}), 401
+    # add all the routes
+    from .routes.auth import auth_bp
+    from .routes.projects import projects_bp
+    from .routes.milestones import milestones_bp
+    from .routes.tasks import tasks_bp
+    from .routes.comments import comments_bp
+    from .routes.status_updates import status_updates_bp
+    from .routes.user import user_bp
 
-    
-    CORS(
-        app,
-        resources={r"/api/*": {"origins": app.config["CORS_ORIGINS"]}},
-        supports_credentials=True,
-    )
-
-    # Error handlers
-    register_error_handlers(app)
-
-    # Blueprints
-    app.register_blueprint(api)
-
-    @app.get("/api/health")
-    def health():
-        return {"status": "ok"}, 200
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(projects_bp)
+    app.register_blueprint(milestones_bp)
+    app.register_blueprint(tasks_bp)
+    app.register_blueprint(comments_bp)
+    app.register_blueprint(status_updates_bp)
+    app.register_blueprint(user_bp)
 
     return app

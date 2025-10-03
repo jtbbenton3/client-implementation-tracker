@@ -1,84 +1,76 @@
-from datetime import datetime
-from flask import Blueprint, request, jsonify
-from flask_login import login_required, current_user
-from sqlalchemy import and_, or_
-from app.db import db
-from app.models import Project, StatusUpdate
-from app.routes.utils import get_pagination_defaults, paged_response
-from app.validators import validate_json
-from app.schemas import StatusCreateSchema
+from flask import Blueprint, request, jsonify, session
+from ..db import db
+from ..models import StatusUpdate, Project
+from .utils import login_required
 
-status_updates_bp = Blueprint("status_updates", __name__)
+status_updates_bp = Blueprint("status_updates", __name__, url_prefix="/api/projects/<int:project_id>/status_updates")
 
-def _owns(project_id: int):
-    proj = Project.query.get_or_404(project_id)
-    return proj if proj.owner_id == current_user.id else None
-
-def _parse_ymd(value: str | None):
-    if not value:
-        return None
-    try:
-        return datetime.strptime(value, "%Y-%m-%d").date()
-    except Exception:
-        return None
-
-@status_updates_bp.get("/<int:project_id>/status")
+@status_updates_bp.route("", methods=["POST"])
 @login_required
-def list_status(project_id):
-    if not _owns(project_id):
-        return jsonify({"message": "forbidden"}), 403
-
-    page, page_size = get_pagination_defaults()
-    start = _parse_ymd(request.args.get("start"))
-    end   = _parse_ymd(request.args.get("end"))
-    risk  = (request.args.get("risk") or "").strip()
-    q     = (request.args.get("q") or "").strip()
-
-    filt = [StatusUpdate.project_id == project_id]
-    if start:
-        filt.append(StatusUpdate.created_at >= datetime.combine(start, datetime.min.time()))
-    if end:
-        filt.append(StatusUpdate.created_at <= datetime.combine(end, datetime.max.time()))
-    if risk:
-        filt.append(StatusUpdate.risk == risk)
-    if q:
-        like = f"%{q}%"
-        filt.append(or_(
-            StatusUpdate.summary.ilike(like),
-            StatusUpdate.risk.ilike(like)
-        ))
-
-    qset = StatusUpdate.query.filter(and_(*filt)).order_by(StatusUpdate.created_at.desc())
-    total = qset.count()
-    rows = qset.offset((page - 1) * page_size).limit(page_size).all()
-    return paged_response([s.to_dict() for s in rows], page, page_size, total)
-
-@status_updates_bp.post("/<int:project_id>/status")
-@login_required
-@validate_json(StatusCreateSchema)
-def create_status(project_id, data):
-    if not _owns(project_id):
-        return jsonify({"message": "forbidden"}), 403
-
-    s = StatusUpdate(
+def create_status_update(project_id):
+    user_id = session.get("user_id")
+    
+    # check if user owns this project
+    project = Project.query.filter_by(id=project_id, owner_id=user_id).first()
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+    
+    data = request.get_json()
+    if not data.get("content"):
+        return jsonify({"error": "Content is required"}), 400
+    
+    update = StatusUpdate(
+        content=data["content"],
         project_id=project_id,
-        summary=data["summary"],
-        risk=data.get("risk")
+        user_id=user_id
     )
-    db.session.add(s)
+    db.session.add(update)
     db.session.commit()
-    return jsonify({"status": s.to_dict()}), 201
+    return jsonify({"status_update": update.to_dict()}), 201
 
-@status_updates_bp.delete("/<int:project_id>/status/<int:status_id>")
+@status_updates_bp.route("", methods=["GET"])
 @login_required
-def delete_status(project_id, status_id):
-    if not _owns(project_id):
-        return jsonify({"message": "forbidden"}), 403
+def list_status_updates(project_id):
+    user_id = session.get("user_id")
+    
+    # check if user owns this project
+    project = Project.query.filter_by(id=project_id, owner_id=user_id).first()
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+    
+    updates = StatusUpdate.query.filter_by(project_id=project_id).order_by(StatusUpdate.created_at.desc()).all()
+    return jsonify({"items": [u.to_dict() for u in updates]}), 200
 
-    s = StatusUpdate.query.get_or_404(status_id)
-    if s.project_id != project_id:
-        return jsonify({"message": "bad request"}), 400
+@status_updates_bp.route("/<int:status_update_id>", methods=["GET"])
+@login_required
+def get_status_update(project_id, status_update_id):
+    user_id = session.get("user_id")
+    
+    # check if user owns this project
+    project = Project.query.filter_by(id=project_id, owner_id=user_id).first()
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+    
+    update = StatusUpdate.query.filter_by(id=status_update_id, project_id=project_id).first()
+    if not update:
+        return jsonify({"error": "Status update not found"}), 404
+    
+    return jsonify({"status_update": update.to_dict()}), 200
 
-    db.session.delete(s)
+@status_updates_bp.route("/<int:status_update_id>", methods=["DELETE"])
+@login_required
+def delete_status_update(project_id, status_update_id):
+    user_id = session.get("user_id")
+    
+    # check if user owns this project
+    project = Project.query.filter_by(id=project_id, owner_id=user_id).first()
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+    
+    update = StatusUpdate.query.filter_by(id=status_update_id, project_id=project_id).first()
+    if not update:
+        return jsonify({"error": "Status update not found"}), 404
+    
+    db.session.delete(update)
     db.session.commit()
-    return jsonify({"message": "deleted"}), 200
+    return jsonify({"message": "Status update deleted"}), 200

@@ -1,5 +1,6 @@
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
+# backend/app/db.py
 
+from flask_sqlalchemy import SQLAlchemy
+
+# Create the SQLAlchemy database instance
 db = SQLAlchemy()
-migrate = Migrate()

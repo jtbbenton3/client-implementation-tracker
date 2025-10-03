@@ -1,55 +1,35 @@
-from flask import Blueprint, jsonify
-from flask_login import login_required, current_user
-from app.db import db
-from app.models import Task, Comment
-from app.routes.utils import get_pagination_defaults, paged_response
-from app.validators import validate_json
-from app.schemas import CommentCreateSchema
+from flask import Blueprint, jsonify, request, session
+from ..db import db
+from ..models import Comment, Task
+from .utils import login_required
 
-comments_bp = Blueprint("comments_bp", __name__)
+comments_bp = Blueprint("comments_bp", __name__, url_prefix="/api/tasks")
 
-def _owns_task(task_id: int):
-    task = Task.query.get_or_404(task_id)
-    project = getattr(task.milestone, "project", None)
-    return task if project and project.owner_id == current_user.id else None
+@comments_bp.post("/<int:task_id>/comments")
+@login_required
+def create_comment(task_id):
+    Task.query.get_or_404(task_id)
+    data = request.get_json() or {}
+    if not data.get("body"):
+        return jsonify({"message": "body required"}), 400
 
-@comments_bp.get("/tasks/<int:task_id>/comments")
+    comment = Comment(task_id=task_id, body=data["body"])
+    db.session.add(comment)
+    db.session.commit()
+    return jsonify({"comment": comment.to_dict()}), 201
+
+@comments_bp.get("/<int:task_id>/comments")
 @login_required
 def list_comments(task_id):
-    task = _owns_task(task_id)
-    if not task:
-        return jsonify({"message": "forbidden"}), 403
+    Task.query.get_or_404(task_id)
+    rows = Comment.query.filter_by(task_id=task_id).all()
+    return jsonify({"items": [c.to_dict() for c in rows]}), 200
 
-    page, page_size = get_pagination_defaults()
-    q = Comment.query.filter_by(task_id=task_id).order_by(Comment.created_at.desc())
-    total = q.count()
-    rows = q.offset((page - 1) * page_size).limit(page_size).all()
-    return paged_response([c.to_dict() for c in rows], page, page_size, total)
-
-@comments_bp.post("/tasks/<int:task_id>/comments")
-@login_required
-@validate_json(CommentCreateSchema)
-def create_comment(task_id, data):
-    task = _owns_task(task_id)
-    if not task:
-        return jsonify({"message": "forbidden"}), 403
-
-    c = Comment(task_id=task_id, body=data["body"])
-    db.session.add(c)
-    db.session.commit()
-    return jsonify({"comment": c.to_dict()}), 201
-
-@comments_bp.delete("/tasks/<int:task_id>/comments/<int:comment_id>")
+@comments_bp.delete("/<int:task_id>/comments/<int:comment_id>")
 @login_required
 def delete_comment(task_id, comment_id):
-    task = _owns_task(task_id)
-    if not task:
-        return jsonify({"message": "forbidden"}), 403
-
-    c = Comment.query.get_or_404(comment_id)
-    if c.task_id != task_id:
-        return jsonify({"message": "bad request"}), 400
-
-    db.session.delete(c)
+    Task.query.get_or_404(task_id)
+    comment = Comment.query.get_or_404(comment_id)
+    db.session.delete(comment)
     db.session.commit()
-    return jsonify({"message": "deleted"}), 200
+    return jsonify({"message": "Comment deleted"}), 200

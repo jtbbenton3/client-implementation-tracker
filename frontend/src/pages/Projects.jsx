@@ -1,48 +1,66 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { getProjects, createProject } from "../lib/api";
+import { Link } from "react-router-dom";
 
-function Projects() {
+export default function Projects() {
   const [projects, setProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [title, setTitle] = useState("");
+  const [clientName, setClientName] = useState("");
   const [error, setError] = useState(null);
-  const navigate = useNavigate();
+
+  const fetchProjects = async () => {
+    try {
+      const res = await getProjects();
+      setProjects(res.items);
+    } catch (err) {
+      setError("Failed to load projects");
+    }
+  };
 
   useEffect(() => {
-    async function fetchProjects() {
-      try {
-        const res = await fetch("http://localhost:5555/projects", {
-          credentials: "include",
-        });
-        if (!res.ok) {
-          throw new Error("Failed to fetch projects");
-        }
-        const data = await res.json();
-        setProjects(data);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-
     fetchProjects();
   }, []);
 
-  if (loading) return <p>Loading...</p>;
-  if (error) return <p style={{ color: "red" }}>{error}</p>;
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await createProject({ title, client_name: clientName });
+      setTitle("");
+      setClientName("");
+      fetchProjects();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
   return (
-    <div className="projects-page">
+    <div>
       <h2>Projects</h2>
-      <ul>
-        {projects.map((project) => (
-          <li key={project.id} onClick={() => navigate(`/projects/${project.id}`)}>
-            <strong>{project.title}</strong> — {project.client_name}
-          </li>
+      <form onSubmit={handleSubmit} className="card">
+        <input
+          placeholder="Project Title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+        <input
+          placeholder="Client Name"
+          value={clientName}
+          onChange={(e) => setClientName(e.target.value)}
+        />
+        <button type="submit">Create Project</button>
+      </form>
+
+      {error && <p style={{ color: "red" }}>{error}</p>}
+
+      <div>
+        {projects.map((p) => (
+          <div key={p.id} className="card">
+            <h3>{p.title}</h3>
+            <p>Client: {p.client_name}</p>
+            <Link to={`/projects/${p.id}`}>View Details</Link>
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
-
-export default Projects;

@@ -1,65 +1,51 @@
-import { useState } from "react";
+import React, { useState } from "react";
+import { login } from "../lib/api";
+import { useAuth } from "../Context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
 
-function Login() {
+export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
-  const { login } = useAuth();
   const navigate = useNavigate();
+  const { refreshUser } = useAuth();
 
-  async function handleSubmit(e) {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-
     try {
-      const response = await fetch("http://localhost:5555/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include", // IMPORTANT: Sends/receives cookies
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Login failed");
-      }
-
-      const userData = await response.json();
-      login(userData); // Update global context state
-      navigate("/");   // Redirect to homepage after login
-
+      console.log("Attempting login...");
+      const result = await login({ email, password });
+      console.log("Login successful:", result);
+      console.log("Refreshing user...");
+      await refreshUser();
+      console.log("Navigating to projects...");
+      navigate("/projects");
     } catch (err) {
+      console.error("Login failed:", err);
       setError(err.message);
     }
-  }
+  };
 
   return (
-    <div className="login-form">
+    <div className="card">
       <h2>Login</h2>
-      {error && <p style={{ color: "red" }}>{error}</p>}
       <form onSubmit={handleSubmit}>
         <input
+          placeholder="Email"
           type="email"
           value={email}
-          placeholder="Email"
           onChange={(e) => setEmail(e.target.value)}
-          required
         />
         <input
+          placeholder="Password"
           type="password"
           value={password}
-          placeholder="Password"
           onChange={(e) => setPassword(e.target.value)}
-          required
         />
-        <button type="submit">Log In</button>
+        {error && <p style={{ color: "red" }}>{error}</p>}
+        <button type="submit">Login</button>
       </form>
     </div>
   );
 }
-
-export default Login;

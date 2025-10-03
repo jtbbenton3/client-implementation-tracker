@@ -1,25 +1,35 @@
-import { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { getMe } from "../lib/api";
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  function login(userData) {
-    setUser(userData);
-  }
+  const refreshUser = async () => {
+    try {
+      console.log("Attempting to get user data...");
+      const data = await getMe();
+      console.log("User data received:", data);
+      setUser(data);
+    } catch (error) {
+      console.log("Failed to get user data:", error);
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  function logout() {
-    setUser(null);
-  }
+  useEffect(() => {
+    refreshUser();
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
-  return useContext(AuthContext);
-}
+export const useAuth = () => useContext(AuthContext);

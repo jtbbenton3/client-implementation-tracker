@@ -1,6 +1,5 @@
 from marshmallow import Schema, fields, validate
 
-# ---- Project Schemas ----
 class ProjectCreateSchema(Schema):
     client_name = fields.Str(required=True, validate=validate.Length(min=1, max=200))
     title       = fields.Str(required=True, validate=validate.Length(min=1, max=200))
@@ -13,26 +12,20 @@ class ProjectPatchSchema(Schema):
     phase       = fields.Str(validate=validate.Length(max=200))
     description = fields.Str(load_default=None)
 
-# ---- Milestone Schemas ----
 class MilestoneCreateSchema(Schema):
     name        = fields.Str(required=True, validate=validate.Length(min=1, max=200))
     target_date = fields.Date(load_default=None)
 
-# ---- Task Schemas ----
 class TaskCreateSchema(Schema):
     title    = fields.Str(required=True, validate=validate.Length(min=1, max=200))
     assignee = fields.Str(load_default=None)
     due_date = fields.Date(load_default=None)
 
 class TaskUpdateSchema(Schema):
-    """
-    All fields optional for partial updates.
-    """
     title    = fields.Str(load_default=None, validate=validate.Length(min=1, max=200))
     assignee = fields.Str(load_default=None)
     due_date = fields.Date(load_default=None)
 
-# ---- Status Schemas ----
 class StatusCreateSchema(Schema):
     summary = fields.Str(required=True)
     risk    = fields.Str(load_default=None, validate=validate.Length(max=200))
@@ -41,11 +34,9 @@ class StatusUpdateCreateSchema(Schema):
     summary = fields.Str(required=True, validate=validate.Length(min=1))
     risk    = fields.Str(load_default=None, validate=validate.Length(max=200))
 
-# ---- Comment Schema ----
 class CommentCreateSchema(Schema):
     body = fields.Str(required=True, validate=validate.Length(min=1))
 
-# ---- Auth Schemas ----
 class SignupSchema(Schema):
     email    = fields.Email(required=True)
     name     = fields.Str(required=True, validate=validate.Length(min=1, max=200))

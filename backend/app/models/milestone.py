@@ -1,28 +1,21 @@
-from datetime import datetime, date
-from ..db import db
+from datetime import date
+from app.db import db
 
 class Milestone(db.Model):
     __tablename__ = "milestones"
 
     id = db.Column(db.Integer, primary_key=True)
-    project_id = db.Column(db.Integer, db.ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
-
-    name = db.Column(db.String(200), nullable=False)
+    name = db.Column(db.String(255), nullable=False)
     target_date = db.Column(db.Date, nullable=True)
-    is_complete = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=False)
 
-    tasks = db.relationship("Task", backref="milestone", cascade="all, delete-orphan", passive_deletes=True)
+    project = db.relationship("Project", back_populates="milestones")
+    tasks = db.relationship("Task", back_populates="milestone", cascade="all, delete-orphan")
 
-    def to_dict(self, with_children=False):
-        data = {
+    def to_dict(self):
+        return {
             "id": self.id,
-            "project_id": self.project_id,
             "name": self.name,
-            "target_date": self.target_date.isoformat() if isinstance(self.target_date, date) else None,
-            "is_complete": self.is_complete,
-            "created_at": self.created_at.isoformat(),
+            "target_date": self.target_date.isoformat() if self.target_date else None,
+            "project_id": self.project_id,
         }
-        if with_children:
-            data["tasks"] = [t.to_dict() for t in self.tasks]
-        return data
