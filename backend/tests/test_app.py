@@ -1,7 +1,7 @@
 import pytest
 from app import create_app, db
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def test_client():
     app = create_app()
     app.config.update({
@@ -51,8 +51,9 @@ def test_signup_and_login(test_client):
 
 
 def test_create_and_get_project(test_client):
-    # test login
-    test_client.post("/api/login", json={
+    # create user first
+    test_client.post("/api/signup", json={
+        "name": "Test User",
         "email": "testuser@test.com",
         "password": "password123"
     })
@@ -81,14 +82,21 @@ def test_create_and_get_project(test_client):
 
 
 def test_milestones_flow(test_client):
-    # test login
-    test_client.post("/api/login", json={
+    # create user and project first
+    test_client.post("/api/signup", json={
+        "name": "Test User",
         "email": "testuser@test.com",
         "password": "password123"
     })
+    
+    project_res = test_client.post("/api/projects", json={
+        "title": "Test Project",
+        "client_name": "Test Client"
+    })
+    project_id = project_res.get_json()["project"]["id"]
 
     # add milestone
-    res = test_client.post("/api/projects/1/milestones", json={
+    res = test_client.post(f"/api/projects/{project_id}/milestones", json={
         "name": "Phase 1",
         "target_date": "2025-12-01"
     })
@@ -97,21 +105,34 @@ def test_milestones_flow(test_client):
     assert data["name"] == "Phase 1"
 
     # get milestones
-    res = test_client.get("/api/projects/1/milestones")
+    res = test_client.get(f"/api/projects/{project_id}/milestones")
     assert res.status_code == 200
     milestones = res.get_json()["items"]
     assert len(milestones) > 0
 
 
 def test_tasks_flow(test_client):
-    # test login
-    test_client.post("/api/login", json={
+    # create user, project, and milestone first
+    test_client.post("/api/signup", json={
+        "name": "Test User",
         "email": "testuser@test.com",
         "password": "password123"
     })
+    
+    project_res = test_client.post("/api/projects", json={
+        "title": "Test Project",
+        "client_name": "Test Client"
+    })
+    project_id = project_res.get_json()["project"]["id"]
+    
+    milestone_res = test_client.post(f"/api/projects/{project_id}/milestones", json={
+        "name": "Phase 1",
+        "target_date": "2025-12-01"
+    })
+    milestone_id = milestone_res.get_json()["milestone"]["id"]
 
     # add task
-    res = test_client.post("/api/1/milestones/1/tasks", json={
+    res = test_client.post(f"/api/{project_id}/milestones/{milestone_id}/tasks", json={
         "title": "Do backend setup",
         "assignee": "dev1",
         "due_date": "2025-12-15"
@@ -121,39 +142,50 @@ def test_tasks_flow(test_client):
     assert task_data["title"] == "Do backend setup"
 
     # get tasks
-    res = test_client.get("/api/1/milestones/1/tasks")
+    res = test_client.get(f"/api/{project_id}/milestones/{milestone_id}/tasks")
     assert res.status_code == 200
     tasks = res.get_json()["items"]
     assert len(tasks) > 0
 
     # update task
     task_id = task_data["id"]
-    res = test_client.patch(f"/api/1/milestones/1/tasks/{task_id}", json={
+    res = test_client.patch(f"/api/{project_id}/milestones/{milestone_id}/tasks/{task_id}", json={
         "title": "Do frontend setup"
     })
     assert res.status_code == 200
     assert res.get_json()["task"]["title"] == "Do frontend setup"
 
     # delete task
-    res = test_client.delete(f"/api/1/milestones/1/tasks/{task_id}")
+    res = test_client.delete(f"/api/{project_id}/milestones/{milestone_id}/tasks/{task_id}")
     assert res.status_code == 200
     assert res.get_json()["message"] == "Task deleted"
 
 
 def test_comments_flow(test_client):
-    # test login
-    test_client.post("/api/login", json={
+    # create user, project, milestone, and task first
+    test_client.post("/api/signup", json={
+        "name": "Test User",
         "email": "testuser@test.com",
         "password": "password123"
     })
-
-    # make a task to comment on
-    task_res = test_client.post("/api/1/milestones/1/tasks", json={
+    
+    project_res = test_client.post("/api/projects", json={
+        "title": "Test Project",
+        "client_name": "Test Client"
+    })
+    project_id = project_res.get_json()["project"]["id"]
+    
+    milestone_res = test_client.post(f"/api/projects/{project_id}/milestones", json={
+        "name": "Phase 1",
+        "target_date": "2025-12-01"
+    })
+    milestone_id = milestone_res.get_json()["milestone"]["id"]
+    
+    task_res = test_client.post(f"/api/{project_id}/milestones/{milestone_id}/tasks", json={
         "title": "Task with comments",
         "assignee": "dev2",
         "due_date": "2025-12-20"
     })
-    assert task_res.status_code == 201
     task_id = task_res.get_json()["task"]["id"]
 
     # add comment

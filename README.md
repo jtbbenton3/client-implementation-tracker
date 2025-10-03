@@ -66,9 +66,38 @@ All endpoints are namespaced under `/api/`:
 - CORS configuration for cross-origin requests
 - Input validation on all endpoints
 
+## Testing
+
+### Backend Tests
+```bash
+# From project root
+cd backend
+source venv/bin/activate  # Windows: venv\Scripts\activate
+python -m pytest tests/test_app.py -v
+```
+
+### Frontend Tests
+```bash
+# From project root
+cd frontend
+npm test
+```
+
+### Run All Tests
+```bash
+# Backend tests
+cd backend && source venv/bin/activate && python -m pytest tests/test_app.py -v
+
+# Frontend tests
+cd frontend && npm test
+```
+
+**Test Coverage:**
+- **Backend (5 tests)**: Authentication, Projects, Milestones, Tasks, Comments
+- **Frontend (16 tests)**: App, Login, Signup, Projects, NavBar components
+
 ## Development
 
-**Run Tests**: `pytest` (backend), `npm test` (frontend)
 **Database Migrations**: `flask db migrate -m "message"` then `flask db upgrade`
 
 ## Environment Variables
